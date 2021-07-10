@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 dtype = torch.float
-env_name = "CartPole-v0"
+env_name = "LunarLander-v2"
 
 # Define a transition
 Transition = namedtuple("Transition", ["state", "action", "reward", "done", "next_state"])

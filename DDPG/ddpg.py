@@ -56,21 +56,32 @@ class Critic(nn.Module):
         # Crtitc is the network based on DQN
         self.s_dim = s_dim
         self.a_dim = a_dim
-        self.model = nn.Sequential(
-            nn.Linear(s_dim + a_dim, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1)
-        )
+        # network architecture
+        self.fc1 = nn.Linear(self.s_dim + self.a_dim, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 1)
+
+        torch.nn.init.uniform_(self.fc1.weight.data, -0.004, 0.004)
+        torch.nn.init.uniform_(self.fc2.weight.data, -0.003, 0.003)
+        torch.nn.init.uniform_(self.fc3.weight.data, -0.002,0.002)
+
+        # torch.nn.init.uniform_(self.fc1.bias.data, -0.004, 0.004)
+        # torch.nn.init.uniform_(self.fc2.bias.data, -0.003, 0.003)
+        # torch.nn.init.uniform_(self.fc3.bias.data, -0.002,0.002)
+
+        # Batach_norm layers
+        self.bn1 = nn.LayerNorm(128)
+        self.bn2 = nn.LayerNorm(64)
+        self.bn3 = nn.LayerNorm(1)
         self.to(dtype).to(device)
 
     def forward(self, s, a):
         s = torch.tensor(s).to(dtype).to(device)
         x = torch.cat([s.view(-1, self.s_dim), a.view(-1, self.a_dim)], dim=1).to(dtype).to(device)
-        return self.model(x)
+        x = F.relu(self.bn1(self.fc1(x)))
+        x = F.relu(self.bn2(self.fc2(x)))
+        x = self.bn3(self.fc3(x))
+        return x
 
 class Actor(nn.Module):
     def __init__(self, s_dim, a_dim):
@@ -78,21 +89,33 @@ class Actor(nn.Module):
         super(Actor, self).__init__()
         self.s_dim = s_dim
         self.a_dim = a_dim
-        self.model = nn.Sequential(
-            nn.Linear(s_dim, 128),
-            nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, a_dim),
-            nn.Tanh() # To squish the output between [-1, 1]
-        )
+        self.fc1 = nn.Linear(self.s_dim, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, self.a_dim)
+        self.tanh = nn.Tanh()
+
+        # initialise weights 
+        torch.nn.init.uniform_(self.fc1.weight.data, -0.004, 0.004)
+        torch.nn.init.uniform_(self.fc2.weight.data, -0.003, 0.003)
+        torch.nn.init.uniform_(self.fc3.weight.data, -0.002,0.002)
+
+        # torch.nn.init.uniform_(self.fc1.bias.data, -0.004, 0.004)
+        # torch.nn.init.uniform_(self.fc2.bias.data, -0.003, 0.003)
+        # torch.nn.init.uniform_(self.fc3.bias.data, -0.002,0.002)
+
+        # batch norm layers
+        self.bn1 = nn.LayerNorm(128)
+        self.bn2 = nn.LayerNorm(64)
+        self.bn3 = nn.LayerNorm(self.a_dim)
         self.to(dtype).to(device)
 
     def forward(self, s):
         s = torch.tensor(s).to(dtype).to(device)
-        return self.model(s)
+        s = F.relu(self.bn1(self.fc1(s)))
+        s = F.relu(self.bn2(self.fc2(s)))
+        s = self.tanh((self.bn3(self.fc3(s))))
+        
+        return s
 
 class Noise:
     # Using zero mean custom standard deviation gaussian normal distribution
@@ -109,7 +132,7 @@ class Agent:
         self.s_dim = self.env.observation_space.shape[0]
         
         # Replay buffer
-        self.buffer = ReplayBuffer(1000, 128)
+        self.buffer = ReplayBuffer(5000, 128)
 
         # Noise
         self.noise = Noise(0.2)
@@ -135,7 +158,7 @@ class Agent:
         self.polyak = 0.995
 
         # other parameters
-        self.exploration = 1000
+        self.exploration = 10000
         self.step_count = 0
 
         # containers
@@ -176,7 +199,7 @@ class Agent:
 
         # Step3: Calculate the loss for policy network
         self.policy_optimiser.zero_grad()
-        policy_loss = -torch.mean(self.Q(sample.state, self.policy(sample.state)))
+        policy_loss = -self.Q(sample.state, self.policy(sample.state)).mean()
         policy_loss.backward()
         self.policy_losses.append(policy_loss.item())
         self.policy_optimiser.step()
@@ -218,7 +241,7 @@ class Agent:
                 self.soft_target_update()
 
             # Decide whether to update or not
-            if epoch % 2 == 0 and self.step_count > 1000:
+            if epoch % 2 == 0 and self.step_count > 5000:
                 self.updatable = True
 
     def eval(self, EPOCHS):
@@ -267,12 +290,12 @@ class Agent:
         plt.savefig(f"./{ENV}.png")
 
 if __name__ == "__main__":
-    ENV = "LunarLanderContinuous-v2"
+    ENV = "Pendulum-v0"
     VERBOSE = True
     SAVE = True
     RENDER = True
-    EPOCHS = 2500
-    MAX_ITER = 10000
+    EPOCHS = 1000
+    MAX_ITER = 200
 
     env = gym.make(ENV)
     agent = Agent(env)
