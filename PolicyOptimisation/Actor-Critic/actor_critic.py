@@ -82,11 +82,11 @@ class Agent:
 		action = action.cpu().detach().numpy()
 		state, reward, done, _ = self.env.step(action)
 		if not done:
-			self.transition.extend([state, t+1, done])
-			return state, t+1, done
+			self.transition.extend([state, reward, done])
+			return state, reward, done
 		else:
-			self.transition.extend([state, 0, done])
-			return state, 0, done
+			self.transition.extend([state, reward, done])
+			return state, reward, done
 
 	def update_networks(self):
 		"""Calculate the gradients"""
@@ -162,10 +162,10 @@ class Agent:
 			plt.plot(self.cumm_rewards, alpha=0.5)
 			plt.plot(self.moving_avs[0], self.moving_avs[1], color="orange")
 			plt.errorbar(self.moving_avs[0], self.moving_avs[1], self.stds, linestyle="None", marker="^", color="green", alpha=0.75)
-			plt.savefig("CartPole-v0_ActorCritic.png")
+			plt.savefig("Acrobot_ActorCritic.png")
 
 if __name__ == "__main__":
-	env = gym.make("CartPole-v0")
+	env = gym.make("Acrobot-v1")
 	agent = Agent(env)
 	agent.train(250)
 	agent.plot_results()
